@@ -1336,6 +1336,7 @@ void SelectionSingleton::recordAutomaticSelectionHistoryIfChanged(const SelStack
     }
 
     selStackPush();
+    getMainWindow()->updateActions();
 }
 
 void SelectionSingleton::beginSelectionHistorySuppression()
@@ -1379,6 +1380,7 @@ void SelectionSingleton::endSelectionHistoryBatch()
     auto afterState = makeSelStackItem();
     if (afterState != _selectionHistoryBatchStartState) {
         selStackPush();
+        getMainWindow()->updateActions();
     }
 
     _selectionHistoryBatchChanged = false;
