@@ -1273,6 +1273,99 @@ std::string SelectionSingleton::_SelObj::getSubString() const
     return {};
 }
 
+class SelectionSingleton::AutoHistoryMutationGuard
+{
+public:
+    explicit AutoHistoryMutationGuard(SelectionSingleton& owner)
+        : owner(owner)
+        , beforeState(owner.makeSelStackItem())
+    {}
+
+    ~AutoHistoryMutationGuard()
+    {
+        owner.recordAutomaticSelectionHistoryIfChanged(beforeState);
+    }
+
+private:
+    SelectionSingleton& owner;
+    SelStackItem beforeState;
+};
+
+SelectionSingleton::SelStackItem SelectionSingleton::makeSelStackItem() const
+{
+    SelStackItem item;
+    for (const auto& sel : _SelList) {
+        item.emplace(sel.DocName.c_str(), sel.FeatName.c_str(), sel.SubName.c_str());
+    }
+    return item;
+}
+
+void SelectionSingleton::recordAutomaticSelectionHistoryIfChanged(const SelStackItem& beforeState)
+{
+    if (_selectionHistorySuppressionDepth > 0) {
+        return;
+    }
+
+    auto afterState = makeSelStackItem();
+    if (beforeState == afterState) {
+        return;
+    }
+
+    if (_selectionHistoryBatchDepth > 0) {
+        _selectionHistoryBatchChanged = true;
+        return;
+    }
+
+    selStackPush();
+}
+
+void SelectionSingleton::beginSelectionHistorySuppression()
+{
+    ++_selectionHistorySuppressionDepth;
+}
+
+void SelectionSingleton::endSelectionHistorySuppression()
+{
+    if (_selectionHistorySuppressionDepth > 0) {
+        --_selectionHistorySuppressionDepth;
+    }
+}
+
+void SelectionSingleton::beginSelectionHistoryBatch()
+{
+    ++_selectionHistoryBatchDepth;
+    if (_selectionHistoryBatchDepth == 1) {
+        _selectionHistoryBatchStartState = makeSelStackItem();
+        _selectionHistoryBatchChanged = false;
+    }
+}
+
+void SelectionSingleton::endSelectionHistoryBatch()
+{
+    if (_selectionHistoryBatchDepth <= 0) {
+        return;
+    }
+
+    --_selectionHistoryBatchDepth;
+    if (_selectionHistoryBatchDepth > 0) {
+        return;
+    }
+
+    if (!_selectionHistoryBatchChanged || _selectionHistorySuppressionDepth > 0) {
+        _selectionHistoryBatchChanged = false;
+        _selectionHistoryBatchStartState.clear();
+        return;
+    }
+
+    auto afterState = makeSelStackItem();
+    if (afterState != _selectionHistoryBatchStartState) {
+        selStackPush();
+    }
+
+    _selectionHistoryBatchChanged = false;
+    _selectionHistoryBatchStartState.clear();
+}
+
 bool SelectionSingleton::addSelection(
     const char* pDocName,
     const char* pObjectName,
@@ -1285,6 +1378,8 @@ bool SelectionSingleton::addSelection(
     SelectionChanges::PickedPoint pickedPoint
 )
 {
+    AutoHistoryMutationGuard historyGuard(*this);
+
     if (pickedList) {
         _PickedList.clear();
         for (const auto& sel : *pickedList) {
@@ -1385,15 +1480,12 @@ void SelectionSingleton::selStackPush(bool clearForward, bool overwrite)
     if (clearForward) {
         _SelStackForward.clear();
     }
-    if (_SelList.empty()) {
+    SelStackItem item = makeSelStackItem();
+    if (item.empty()) {
         return;
     }
     if ((int)_SelStackBack.size() >= stackSize) {
         _SelStackBack.pop_front();
-    }
-    SelStackItem item;
-    for (auto& sel : _SelList) {
-        item.emplace(sel.DocName.c_str(), sel.FeatName.c_str(), sel.SubName.c_str());
     }
     if (!_SelStackBack.empty() && _SelStackBack.back() == item) {
         return;
@@ -1412,6 +1504,9 @@ void SelectionSingleton::selStackGoBack(int count)
     if (count <= 0) {
         return;
     }
+
+    SelectionHistorySuppressor suppressHistory;
+
     if (!_SelList.empty()) {
         selStackPush(false, true);
         clearCompleteSelection();
@@ -1455,6 +1550,9 @@ void SelectionSingleton::selStackGoForward(int count)
     if (count <= 0) {
         return;
     }
+
+    SelectionHistorySuppressor suppressHistory;
+
     if (!_SelList.empty()) {
         selStackPush(false, true);
         clearCompleteSelection();
@@ -1533,6 +1631,8 @@ bool SelectionSingleton::addSelections(
     const std::vector<std::string>& pSubNames
 )
 {
+    AutoHistoryMutationGuard historyGuard(*this);
+
     if (!_PickedList.empty()) {
         _PickedList.clear();
         notify(SelectionChanges(SelectionChanges::PickedListChanged));
@@ -1653,6 +1753,8 @@ bool SelectionSingleton::updateSelection(
 
 bool SelectionSingleton::addSelection(const SelectionObject& obj, bool clearPreselect)
 {
+    SelectionHistoryBatcher historyBatch;
+
     const std::vector<std::string>& subNames = obj.getSubNames();
     const std::vector<Base::Vector3d> points = obj.getPickedPoints();
     if (!subNames.empty() && subNames.size() == points.size()) {
@@ -1693,6 +1795,8 @@ void SelectionSingleton::rmvSelection(
     const std::vector<SelObj>* pickedList
 )
 {
+    AutoHistoryMutationGuard historyGuard(*this);
+
     if (pickedList) {
         _PickedList.clear();
         for (const auto& sel : *pickedList) {
@@ -1909,6 +2013,8 @@ void SelectionSingleton::setVisible(VisibleState vis)
 
 void SelectionSingleton::setSelection(const char* pDocName, const std::vector<App::DocumentObject*>& sel)
 {
+    AutoHistoryMutationGuard historyGuard(*this);
+
     if (!_PickedList.empty()) {
         _PickedList.clear();
         notify(SelectionChanges(SelectionChanges::PickedListChanged));
@@ -1945,6 +2051,9 @@ void SelectionSingleton::clearSelection(const char* pDocName, bool clearPreSelec
         clearCompleteSelection(clearPreSelect);
         return;
     }
+
+    AutoHistoryMutationGuard historyGuard(*this);
+
     if (!_PickedList.empty()) {
         _PickedList.clear();
         notify(SelectionChanges(SelectionChanges::PickedListChanged));
@@ -1987,6 +2096,8 @@ void SelectionSingleton::clearSelection(const char* pDocName, bool clearPreSelec
 
 void SelectionSingleton::clearCompleteSelection(bool clearPreSelect)
 {
+    AutoHistoryMutationGuard historyGuard(*this);
+
     if (!_PickedList.empty()) {
         _PickedList.clear();
         notify(SelectionChanges(SelectionChanges::PickedListChanged));

@@ -809,7 +809,6 @@ void TreeWidget::selectAll()
     // if we already did a group select, the second press expand to document
     if (lastSelectAllParent) {
         SelectAllGuard guard(inSelectAllOperation);
-        selection.selStackPush();
         selection.clearSelection();
         selectAllDocumentLevel();
         clearSelectAllContext();
@@ -841,8 +840,8 @@ void TreeWidget::selectAll()
 void TreeWidget::selectAllGroupLevel(const QTreeWidgetItem* targetNode, bool isGroup)
 {
     auto& selection = Gui::Selection();
+    Gui::SelectionHistoryBatcher historyBatch;
 
-    selection.selStackPush();
     selection.clearSelection();
 
     // If current item is a group, also select the group itself along with its children
@@ -906,7 +905,7 @@ void TreeWidget::selectAllDocumentLevel()
     }
 
     auto& selection = Gui::Selection();
-    selection.selStackPush();
+    Gui::SelectionHistoryBatcher historyBatch;
     selection.clearSelection();
     selection.setSelection(gdoc->getDocument()->getName(), gdoc->getDocument()->getObjects());
 }
@@ -3131,7 +3130,7 @@ bool TreeWidget::dropInObject(
         }
         Base::FlagToggler<> guard(_DisableCheckTopParent);
         if (setSelection && !droppedObjects.empty()) {
-            Selection().selStackPush();
+            SelectionHistoryBatcher historyBatch;
             Selection().clearCompleteSelection();
             for (auto& v : droppedObjects) {
                 Selection().addSelection(
@@ -3140,7 +3139,6 @@ bool TreeWidget::dropInObject(
                     v.second.c_str()
                 );
             }
-            Selection().selStackPush();
         }
 
         // If moved, then we sort objects properly.
@@ -4057,7 +4055,7 @@ void TreeWidget::onItemSelectionChanged()
     }
 
     if (selItems.size() <= 1) {
-        Gui::Selection().selStackPush();
+        Gui::SelectionHistoryBatcher historyBatch;
 
         // This special handling to deal with possible discrepancy of
         // Gui.Selection and Tree view selection because of newly added
@@ -4086,15 +4084,14 @@ void TreeWidget::onItemSelectionChanged()
             v.second->clearSelection(item);
             currentDocItem = nullptr;
         }
-        Gui::Selection().selStackPush();
     }
     else {
+        Gui::SelectionHistoryBatcher historyBatch;
         for (auto pos = DocumentMap.begin(); pos != DocumentMap.end(); ++pos) {
             currentDocItem = pos->second;
             pos->second->updateSelection(pos->second);
             currentDocItem = nullptr;
         }
-        Gui::Selection().selStackPush(true, true);
     }
 
     this->blockSelection(lock);
