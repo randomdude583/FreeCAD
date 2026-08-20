@@ -1279,6 +1279,10 @@ public:
     explicit AutoHistoryMutationGuard(SelectionSingleton& owner)
         : owner(owner)
     {
+        if (owner._selectionHistorySuppressionDepth > 0) {
+            return;
+        }
+
         if (owner._selectionHistoryBatchDepth > 0) {
             batched = true;
             return;
