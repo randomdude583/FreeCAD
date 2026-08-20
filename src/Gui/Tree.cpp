@@ -1110,14 +1110,13 @@ void TreeWidget::itemSearch(const QString& text, bool select)
             SelectionChanges::MsgSource::TreeView
         );
         if (select) {
-            Gui::Selection().selStackPush();
+            Gui::SelectionHistoryBatcher historyBatch;
             Gui::Selection().clearSelection();
             Gui::Selection().addSelection(
                 obj->getDocument()->getName(),
                 obj->getNameInDocument(),
                 subname.c_str()
             );
-            Gui::Selection().selStackPush();
         }
         else {
             searchObject = item->object()->getObject();
@@ -2595,7 +2594,7 @@ bool TreeWidget::dropInDocument(
     }
     // Because the existence of subname, we must de-select the drag the
     // object manually. Just do a complete clear here for simplicity
-    Selection().selStackPush();
+    SelectionHistoryBatcher historyBatch;
     Selection().clearCompleteSelection();
 
     // Open command
@@ -2822,7 +2821,7 @@ bool TreeWidget::dropInObject(
     std::ostringstream targetSubname;
     App::DocumentObject* targetParent = nullptr;
     targetItemObj->getSubName(targetSubname, targetParent);
-    Selection().selStackPush();
+    SelectionHistoryBatcher historyBatch;
     Selection().clearCompleteSelection();
     if (targetParent) {
         targetSubname << vp->getObject()->getNameInDocument() << '.';

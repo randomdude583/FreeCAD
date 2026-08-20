@@ -1001,6 +1001,11 @@ public:
     {
         Selection().endSelectionHistorySuppression();
     }
+
+    SelectionHistorySuppressor(const SelectionHistorySuppressor&) = delete;
+    SelectionHistorySuppressor& operator=(const SelectionHistorySuppressor&) = delete;
+    SelectionHistorySuppressor(SelectionHistorySuppressor&&) = delete;
+    SelectionHistorySuppressor& operator=(SelectionHistorySuppressor&&) = delete;
 };
 
 class GuiExport SelectionHistoryBatcher
@@ -1014,6 +1019,11 @@ public:
     {
         Selection().endSelectionHistoryBatch();
     }
+
+    SelectionHistoryBatcher(const SelectionHistoryBatcher&) = delete;
+    SelectionHistoryBatcher& operator=(const SelectionHistoryBatcher&) = delete;
+    SelectionHistoryBatcher(SelectionHistoryBatcher&&) = delete;
+    SelectionHistoryBatcher& operator=(SelectionHistoryBatcher&&) = delete;
 };
 
 }  // namespace Gui

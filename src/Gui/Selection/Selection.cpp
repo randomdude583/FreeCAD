@@ -1278,17 +1278,36 @@ class SelectionSingleton::AutoHistoryMutationGuard
 public:
     explicit AutoHistoryMutationGuard(SelectionSingleton& owner)
         : owner(owner)
-        , beforeState(owner.makeSelStackItem())
-    {}
+    {
+        if (owner._selectionHistoryBatchDepth > 0) {
+            batched = true;
+            return;
+        }
+        beforeState = owner.makeSelStackItem();
+        active = true;
+    }
 
     ~AutoHistoryMutationGuard()
     {
+        if (batched) {
+            if (owner._selectionHistorySuppressionDepth == 0) {
+                owner._selectionHistoryBatchChanged = true;
+            }
+            return;
+        }
+
+        if (!active) {
+            return;
+        }
+
         owner.recordAutomaticSelectionHistoryIfChanged(beforeState);
     }
 
 private:
     SelectionSingleton& owner;
     SelStackItem beforeState;
+    bool active {false};
+    bool batched {false};
 };
 
 SelectionSingleton::SelStackItem SelectionSingleton::makeSelStackItem() const
@@ -1484,11 +1503,11 @@ void SelectionSingleton::selStackPush(bool clearForward, bool overwrite)
     if (item.empty()) {
         return;
     }
-    if ((int)_SelStackBack.size() >= stackSize) {
-        _SelStackBack.pop_front();
-    }
     if (!_SelStackBack.empty() && _SelStackBack.back() == item) {
         return;
+    }
+    if ((int)_SelStackBack.size() >= stackSize) {
+        _SelStackBack.pop_front();
     }
     if (!overwrite || _SelStackBack.empty()) {
         _SelStackBack.emplace_back();
