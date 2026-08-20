@@ -1522,6 +1522,7 @@ void TreeWidget::onSelectDependents()
     // We only have this context menu entry if the selection is within one document but it
     // might be not the active document. Therefore get the document not here but later by casting.
     App::Document* doc;
+    SelectionHistoryBatcher historyBatch;
 
     // if the selected object is a document
     if (this->contextItem && this->contextItem->type() == DocumentType) {
